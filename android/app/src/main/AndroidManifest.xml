@@ -10,7 +10,14 @@
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="33" />
 
-    <!-- 선택: adb 로 한 번 grant 해두면 자동 시간대 끄기를 앱이 직접 할 수 있음 -->
+    <!-- 알림으로 페어링 코드 입력 (foreground 서비스가 페어링 포트를 mDNS 로 탐색) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!-- 부팅 후 무선 디버깅 자동 켜기·재연결 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- 첫 ADB 연결 때 앱이 스스로 grant (pm grant) → 무선 디버깅·자동 시간대를 앱이 직접 끄고 켬 -->
     <uses-permission
         android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
@@ -66,6 +73,25 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/ship_time_widget_large_info" />
         </receiver>
+
+        <!-- 알림 페어링 -->
+        <service
+            android:name=".PairingService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
+        <!-- 부팅 후 자동 재연결 -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        <service
+            android:name=".AdbReconnectJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <!-- (선택) Device Owner 로 등록된 경우 DevicePolicyManager.setTimeZone 사용 -->
         <receiver

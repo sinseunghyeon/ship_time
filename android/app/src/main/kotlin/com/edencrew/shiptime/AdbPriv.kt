@@ -17,7 +17,9 @@ import kotlin.concurrent.thread
  * 무선 디버깅(ADB)으로 셸 명령을 실행한다. 루트/Device Owner 없이
  * 구글 계정이 있는 기기에서도 시스템 시간대를 바꿀 수 있는 권한 경로.
  *
- * 전제: 개발자 옵션 > 무선 디버깅 ON (Android 11+). 재부팅 후 무선 디버깅을 다시 켜야 한다.
+ * 전제: 개발자 옵션 > 무선 디버깅 ON (Android 11+).
+ * 첫 연결 후에는 WRITE_SECURE_SETTINGS 를 스스로 부여해 두고, 무선 디버깅이 꺼져 있으면
+ * 앱이 직접 켠다 (WirelessAdb) — 재부팅 후에도 사용자가 다시 켤 필요가 없다.
  */
 object AdbPriv : Priv {
     override val name = "ADB(무선 디버깅)"
@@ -48,11 +50,16 @@ object AdbPriv : Priv {
             try {
                 // 살아 있는지 가벼운 명령으로 확인
                 val r = execUnlocked("echo ok", minOf(1500, timeoutMs))
-                if (r.out.contains("ok")) return true
+                if (r.out.contains("ok")) {
+                    onConnected(ctx) // 권한이 (OTA 등으로) 빠졌으면 다시 부여
+                    return true
+                }
             } catch (_: Throwable) {
             }
             connected = false
         }
+        // 재부팅 등으로 무선 디버깅이 꺼졌으면 직접 켜고 adbd 가 뜰 때까지 잠깐 기다린다
+        if (WirelessAdb.enableIfAllowed(ctx)) Thread.sleep(minOf(2000L, timeoutMs / 3))
         return connectInternal(ctx, timeoutMs)
     }
 
@@ -103,8 +110,12 @@ object AdbPriv : Priv {
         }
         return try {
             val mgr = ShipAdbManager.get(ctx)
-            val host = AndroidUtils.getHostIpAddress(ctx)
-            val ok = mgr.pair(host, port, pairingCode.trim())
+            // 같은 기기의 페어링 서버이므로 루프백 우선 (getHostIpAddress 는 에뮬레이터에서 호스트 PC 주소)
+            val ok = try {
+                mgr.pair("127.0.0.1", port, pairingCode.trim())
+            } catch (_: java.net.ConnectException) {
+                mgr.pair(AndroidUtils.getHostIpAddress(ctx), port, pairingCode.trim())
+            }
             if (!ok) {
                 lastError = "페어링 실패 (코드/포트 확인)"
                 needsPairing = true
@@ -174,6 +185,7 @@ object AdbPriv : Priv {
             if (ok) {
                 needsPairing = false
                 lastError = null
+                onConnected(ctx)
             } else {
                 lastError = "무선 디버깅에 연결할 수 없음 (켜져 있는지 확인)"
             }
@@ -186,6 +198,18 @@ object AdbPriv : Priv {
             }
             false
         }
+    }
+
+    /**
+     * 연결 직후 1회: 이 셸 권한으로 앱에 WRITE_SECURE_SETTINGS 를 부여한다.
+     * 이후 무선 디버깅 자동 켜기(WirelessAdb)와 자동 시간대 끄기를 앱이 직접 할 수 있다.
+     */
+    private fun onConnected(ctx: Context) {
+        val p = Prefs(ctx)
+        if (!p.adbEverConnected) p.adbEverConnected = true
+        if (WirelessAdb.hasSecureSettings(ctx)) return
+        val r = execUnlocked("pm grant ${ctx.packageName} android.permission.WRITE_SECURE_SETTINGS", 3000)
+        p.appendLog(listOf("WRITE_SECURE_SETTINGS 자체 부여: ${r.summary()}"))
     }
 
     private fun execUnlocked(cmd: String, timeoutMs: Long): ExecResult {

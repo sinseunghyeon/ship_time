@@ -34,6 +34,14 @@ class Native {
   static Future<ShipState> adbPair({required int port, required String code}) async =>
       ShipState(await _map('adbPair', {'port': port, 'code': code}));
 
+  /// 알림 페어링 시작 (알림 권한 요청 → 서비스 → 무선 디버깅 설정 열기)
+  /// {started: bool, reason?: notification_denied | ...}
+  static Future<Map<String, dynamic>> startNotificationPairing() => _map('startNotificationPairing');
+
+  static Future<void> openWirelessDebugging() => _ch.invokeMethod('openWirelessDebugging');
+
+  static Future<ShipState> setAutoAdb(bool v) async => ShipState(await _map('setAutoAdb', {'value': v}));
+
   static Future<void> openDateSettings() => _ch.invokeMethod('openDateSettings');
   static Future<void> openDeveloperSettings() => _ch.invokeMethod('openDeveloperSettings');
 
@@ -70,6 +78,14 @@ class ShipState {
   bool get adbConnected => raw['adbConnected'] as bool? ?? false;
   bool get adbNeedsPairing => raw['adbNeedsPairing'] as bool? ?? false;
   String? get adbError => raw['adbError'] as String?;
+
+  /// 재부팅/꺼짐 시 무선 디버깅 자동 켜기 (사용자 설정)
+  bool get autoAdb => raw['autoAdb'] as bool? ?? true;
+
+  /// 앱이 WRITE_SECURE_SETTINGS 를 갖고 있는지 (첫 연결 때 스스로 부여)
+  bool get secureSettings => raw['secureSettings'] as bool? ?? false;
+  bool get adbEverConnected => raw['adbEverConnected'] as bool? ?? false;
+  bool get adbWifiEnabled => raw['adbWifiEnabled'] as bool? ?? false;
 
   bool get deviceOwner => raw['deviceOwner'] as bool? ?? false;
   int get sdk => raw['sdk'] as int? ?? 0;

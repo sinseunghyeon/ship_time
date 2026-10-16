@@ -111,6 +111,20 @@ class Prefs(ctx: Context) {
             sp.edit().putBoolean(K_ROOT, v).commit()
         }
 
+    /** 재부팅/무선 디버깅 꺼짐 시 앱이 무선 디버깅을 자동으로 켤지 */
+    var autoAdb: Boolean
+        get() = sp.getBoolean(K_AUTO_ADB, true)
+        set(v) {
+            sp.edit().putBoolean(K_AUTO_ADB, v).commit()
+        }
+
+    /** ADB 연결에 한 번이라도 성공했는지 (= 페어링 완료) — 자동 켜기의 전제 */
+    var adbEverConnected: Boolean
+        get() = sp.getBoolean(K_ADB_EVER, false)
+        set(v) {
+            sp.edit().putBoolean(K_ADB_EVER, v).commit()
+        }
+
     var statusState: Int
         get() = sp.getInt(K_STATUS_STATE, STATE_NONE)
         private set(v) {
@@ -155,6 +169,8 @@ class Prefs(ctx: Context) {
         private const val K_OFFSET = "offset"
         private const val K_SYNC = "sync"
         private const val K_ROOT = "use_root"
+        private const val K_AUTO_ADB = "auto_adb"
+        private const val K_ADB_EVER = "adb_ever_connected"
         private const val K_STATUS_STATE = "status_state"
         private const val K_STATUS_TEXT = "status_text"
         private const val K_LOG = "log"

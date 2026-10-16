@@ -11,6 +11,8 @@ import kotlin.concurrent.thread
  * 결과를 logcat 한 줄로 남긴다. tool/emulator_test.sh 가 이 줄을 파싱한다.
  *
  * cmd: plus | minus | set(--ei offset N) | reapply | sync_on | sync_off | state
+ *      | pair_start(알림 페어링 시작 — 앱이 포그라운드일 때) | pair_code(--es code NNNNNN: 알림 입력과 같은 경로)
+ *      | boot(부팅 재연결 작업 예약)
  * 출력: RESULT id=.. cmd=.. ok=.. offset=.. target=.. sys=.. adb=connected sdk=.. msg=..
  */
 class DebugCommandReceiver : BroadcastReceiver() {
@@ -29,6 +31,16 @@ class DebugCommandReceiver : BroadcastReceiver() {
                     "reapply" -> ShipTimeController.reapply(app, 8000)
                     "sync_on" -> { p.sync = true; null }
                     "sync_off" -> { p.sync = false; null }
+                    "pair_start" -> { PairingService.start(app); null }
+                    "pair_code" -> {
+                        app.startService(
+                            Intent(app, PairingService::class.java)
+                                .setAction(PairingService.ACTION_SUBMIT)
+                                .putExtra(PairingService.KEY_CODE, intent.getStringExtra("code")),
+                        )
+                        null
+                    }
+                    "boot" -> { AdbReconnectJob.schedule(app); null }
                     else -> null
                 }
                 Log.i(

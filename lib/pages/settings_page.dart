@@ -5,7 +5,7 @@ import '../ship_controller.dart';
 import '../app_colors.dart';
 
 /// 설정 탭: ADB 연결/권한 상태 + 옵션.
-/// (ADB 연결·페어링 흐름은 기존 코드를 그대로 옮긴 것이다.)
+/// 페어링은 알림 입력(PairingService)이 기본이고, 직접 입력 다이얼로그는 대체 수단이다.
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key, required this.controller});
   final ShipController controller;
@@ -30,9 +30,23 @@ class _SettingsPageState extends State<SettingsPage> {
       c.emitToast('무선 디버깅에 연결됨');
     } else if (r.adbNeedsPairing) {
       c.emitToast('페어링이 필요합니다', error: true);
-      await _showPairDialog();
+      await _startNotificationPairing();
     } else {
       c.emitToast(r.adbError ?? '연결 실패 — 무선 디버깅을 켜세요', error: true);
+    }
+  }
+
+  /// 알림 페어링: 앱이 무선 디버깅 설정을 열고, 포트를 찾으면 알림에서 코드를 받는다.
+  Future<void> _startNotificationPairing() async {
+    final r = await Native.startNotificationPairing();
+    if (!mounted) return;
+    if (r['started'] == true) {
+      c.emitToast('"페어링 코드로 기기 페어링"을 누른 뒤, 알림을 내려 코드를 입력하세요');
+    } else if (r['reason'] == 'notification_denied') {
+      c.emitToast('알림 권한이 없어 직접 입력 창을 엽니다', error: true);
+      await _showPairDialog();
+    } else {
+      c.emitToast('알림 페어링 시작 실패: ${r['reason']}', error: true);
     }
   }
 
@@ -135,6 +149,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
           ],
+          row('자동 복구', _autoRecoveryText(s), col: s.autoAdb && s.secureSettings ? AppColors.ok : null),
           row('자동 시간대',
               switch (s.autoTimeZone) { 1 => '켜짐 (적용 시 자동으로 끔)', 0 => '꺼짐', _ => '알 수 없음' }),
           row('Device Owner', s.deviceOwner ? '예' : '아니오'),
@@ -146,8 +161,12 @@ class _SettingsPageState extends State<SettingsPage> {
               child: Text(s.adbConnected ? '다시 연결' : 'ADB 연결'),
             ),
             FilledButton.tonal(
-              onPressed: c.busy || !s.adbSupported ? null : _showPairDialog,
+              onPressed: c.busy || !s.adbSupported ? null : _startNotificationPairing,
               child: const Text('페어링'),
+            ),
+            TextButton(
+              onPressed: c.busy || !s.adbSupported ? null : _showPairDialog,
+              child: const Text('코드 직접 입력'),
             ),
             if (s.adbConnected)
               TextButton(
@@ -158,7 +177,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       }),
                 child: const Text('연결 해제'),
               ),
-            const TextButton(onPressed: Native.openDeveloperSettings, child: Text('개발자 옵션')),
+            const TextButton(onPressed: Native.openWirelessDebugging, child: Text('무선 디버깅 설정')),
           ]),
           const ExpansionTile(
             tilePadding: EdgeInsets.zero,
@@ -168,9 +187,12 @@ class _SettingsPageState extends State<SettingsPage> {
               Text(
                 '1. 설정 > 휴대전화 정보 > 소프트웨어 정보 > 빌드번호 7번 탭 → 개발자 옵션\n'
                 '2. Wi-Fi 연결 상태에서 개발자 옵션 > 무선 디버깅 켜기\n'
-                '3. 이 앱에서 "ADB 연결" — 처음이면 "페어링"으로 6자리 코드 입력\n'
-                '4. 연결되면 ±1h / 위젯으로 시스템 시간대가 바뀝니다\n\n'
-                '※ 재부팅 후에는 무선 디버깅을 다시 켜고 "ADB 연결"을 한 번 더 하세요.\n'
+                '   ("이 네트워크에서 항상 허용" 체크)\n'
+                '3. 이 앱에서 "페어링" → 무선 디버깅 화면에서 "페어링 코드로 기기 페어링"\n'
+                '4. 알림을 내려 "코드 입력"에 6자리 코드 입력 — 앱으로 돌아올 필요 없음\n'
+                '5. 연결되면 ±1h / 위젯으로 시스템 시간대가 바뀝니다\n\n'
+                '※ 페어링 후에는 재부팅해도 같은 Wi-Fi 에서 앱이 무선 디버깅을 자동으로 켜고 다시 연결합니다.\n'
+                '※ 무선 디버깅은 Wi-Fi 에 연결돼 있어야 켜집니다. 다른 Wi-Fi 에서는 2번(항상 허용)을 한 번 더 하세요.\n'
                 '※ 구글 계정이 있어도 동작합니다 (Device Owner/루트 불필요).\n'
                 '※ 무선 디버깅이 꺼져 있어도 위젯은 "표시 전용"으로 동작합니다.',
                 style: TextStyle(height: 1.5),
@@ -194,6 +216,12 @@ class _SettingsPageState extends State<SettingsPage> {
             onTap: Native.openDateSettings,
           ),
           SwitchListTile(
+            title: const Text('무선 디버깅 자동 켜기'),
+            subtitle: const Text('재부팅 후나 꺼져 있을 때 앱이 직접 켜고 다시 연결합니다 (신뢰한 Wi-Fi 에서만)'),
+            value: s.autoAdb,
+            onChanged: c.busy ? null : (v) => c.setAutoAdb(v),
+          ),
+          SwitchListTile(
             title: const Text('루트(su) 사용'),
             subtitle: Text(s.useRoot
                 ? (s.rootVerified == true ? '루트 권한으로도 시도합니다' : '루트 확인 실패 — 루팅된 기기 전용')
@@ -205,6 +233,12 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
+}
+
+String _autoRecoveryText(ShipState s) {
+  if (!s.autoAdb) return '꺼짐';
+  if (s.secureSettings) return '준비됨 — 재부팅 후 자동으로 다시 연결';
+  return s.adbEverConnected ? '권한 부여 실패 — 다시 연결해 보세요' : '첫 연결 후 자동으로 설정됩니다';
 }
 
 /// 긴 영문 소켓 에러를 상태 줄에 넣지 않고, 읽기 쉬운 한글로 요약한다.
@@ -283,9 +317,12 @@ class _PairDialogState extends State<_PairDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              '1. 개발자 옵션 > 무선 디버깅 켜기\n'
-              '2. "기기와 페어링"을 눌러 6자리 코드 화면을 연 상태\n'
-              '3. 아래 포트·코드를 입력 후 페어링',
+              '알림 입력을 쓸 수 없을 때의 대체 방법입니다.\n'
+              '설정의 코드 창은 다른 앱으로 전환하면 닫히므로, '
+              '화면 분할로 설정과 이 앱을 함께 띄운 상태에서 입력하세요.\n\n'
+              '1. 개발자 옵션 > 무선 디버깅 > "페어링 코드로 기기 페어링"\n'
+              '2. 포트는 자동으로 찾습니다 (안 되면 화면의 IP 주소:포트 중 포트)\n'
+              '3. 6자리 코드를 입력 후 페어링',
               style: TextStyle(height: 1.45),
             ),
             const SizedBox(height: 12),

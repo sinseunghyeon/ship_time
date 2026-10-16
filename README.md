@@ -1,11 +1,14 @@
 # Ship Time — 선박 시간 위젯
 
+> 기기에 설치되는 앱 이름은 **Helm**입니다. (패키지 `com.edencrew.shiptime`)
+
 홈 화면 위젯의 **[−1h] [+1h]** 버튼 한 번으로 선박 시간을 조정합니다.
 **무선 디버깅(ADB)**이 연결되어 있으면 **기기 시스템 시간대도 같이** 바꿉니다.
 루트·Device Owner 없이, 구글 계정이 있는 기기에서도 동작합니다.
 
 - 기기 시계(UTC)는 건드리지 않고 **시간대만** `Etc/GMT±N`으로 바꿉니다. 그래서 UTC 기준이 틀어지지 않습니다.
-- 권한이 없어도 위젯은 "표시 전용"으로 동작합니다. 위젯의 TextClock이 선박 시간을 표시합니다.
+- 처음 한 번만 **알림에서 6자리 페어링 코드**를 입력하면 됩니다. 이후에는 재부팅해도 앱이 무선 디버깅을 **자동으로 켜고 다시 연결**합니다.
+- 권한이 없거나 Wi-Fi가 없어도 위젯은 "표시 전용"으로 동작합니다. 위젯의 TextClock이 선박 시간을 표시합니다.
 
 ## 구조
 
@@ -25,8 +28,13 @@ android/app/src/main/kotlin/com/edencrew/shiptime/
   ShipAdbManager.kt      libadb-android 연결·키 관리
   ShipTimeController.kt  ★ 시간대 변경 로직 (전략 순차 시도 + 검증 + 로그)
   ShipTimeWidget.kt      AppWidgetProvider + RemoteViews 갱신 + DeviceAdminReceiver
+  PairingService.kt      알림으로 페어링 (포트 mDNS 탐색 + 알림 입력칸으로 코드 수신)
+  WirelessAdb.kt         무선 디버깅 자동 켜기 + BootReceiver / AdbReconnectJob (부팅 후 재연결)
   MainActivity.kt        MethodChannel 핸들러
+android/app/src/debug/.../DebugCommandReceiver.kt   debug 빌드 전용 테스트 훅 (아래 "에뮬레이터 테스트")
 android/app/src/main/res/layout/widget_ship_time(_large).xml   위젯 레이아웃 (기본 / 큰 고양이)
+test/widget_test.dart   Dart 단위 테스트 (ShipState 파싱, 포맷)
+tool/emulator_test.sh   에뮬레이터 시나리오 테스트
 ```
 
 위젯 버튼은 앱이 꺼져 있어도 동작해야 하므로 실제 로직은 Kotlin(`ShipTimeController`)에 있습니다.
@@ -51,23 +59,27 @@ Flutter 앱도 같은 함수를 MethodChannel로 호출합니다.
 ## 친구 폰 설정 (무선 디버깅)
 
 1. 설정 > 휴대전화 정보 > 소프트웨어 정보 > **빌드번호 7번 탭** → 개발자 옵션 활성화
-2. **Wi-Fi에 연결한 상태에서** 개발자 옵션 > **무선 디버깅** 켜기
-3. Ship Time 앱 > **ADB 연결**
-4. 처음이면 **페어링**: 무선 디버깅 > "기기와 페어링" → 6자리 코드·포트를 앱에 입력
+2. **Wi-Fi에 연결한 상태에서** 개발자 옵션 > **무선 디버깅** 켜기 → **"이 네트워크에서 항상 허용"** 체크
+3. Ship Time 앱 > 설정 탭 > **페어링** → 앱이 무선 디버깅 화면을 엽니다
+4. **"페어링 코드로 기기 페어링"** 을 누르고, 화면에 뜬 6자리 코드를 **알림을 내려 "코드 입력"** 에 넣습니다
+   (설정 화면을 벗어나지 않아도 됩니다. 포트는 앱이 자동으로 찾습니다)
 5. 홈 화면 길게 누르기 > 위젯 > Ship Time 추가
 
-⚠️ **재부팅하면 무선 디버깅을 다시 켜고** 앱에서 "ADB 연결"을 한 번 더 해야 합니다. Wi-Fi가 필요합니다.
-페어링은 보통 한 번이면 되고, 이후에는 연결만 다시 하면 됩니다.
+알림 권한을 거부했다면 "코드 직접 입력"으로 포트와 코드를 앱에 입력할 수 있습니다.
 
-### (선택) 자동 시간대 끄기 권한 영구 부여
+### 재부팅 후 자동 복구
 
-PC에서 한 번만:
+첫 연결에 성공하면 앱이 그 ADB 권한으로 자기 자신에게 `WRITE_SECURE_SETTINGS`를 부여합니다(PC 불필요).
+그 뒤로는 다음과 같이 동작합니다.
 
-```bash
-adb shell pm grant com.edencrew.shiptime android.permission.WRITE_SECURE_SETTINGS
-```
+- 부팅 후 Wi-Fi가 잡히면 앱이 **무선 디버깅을 직접 켜고 다시 연결**합니다 (`AdbReconnectJob`).
+- 위젯을 눌렀을 때 무선 디버깅이 꺼져 있으면 앱이 켜고 바로 적용합니다.
+- 설정 탭의 **"무선 디버깅 자동 켜기"** 로 끌 수 있습니다.
 
-앱이 ADB로 연결되어 있으면 이 grant 없이도 `settings put` 명령으로 자동 시간대를 끕니다.
+조건: "항상 허용"으로 신뢰한 **같은 Wi-Fi**여야 합니다. 다른 Wi-Fi나 Wi-Fi가 없는 곳에서는 시스템이 무선 디버깅을 켜지 않으며, 그때 위젯은 "표시 전용"으로 동작합니다.
+새 Wi-Fi에서는 무선 디버깅을 한 번 직접 켜고 "항상 허용"을 체크하면 됩니다 (페어링은 다시 할 필요 없음).
+
+> 자동 켜기를 쓰면 신뢰한 Wi-Fi에서 무선 디버깅이 켜진 상태로 유지됩니다. 페어링된 키가 있어야 접속할 수 있지만, 원하지 않으면 스위치로 끄세요.
 
 ### (선택) Device Owner — 공장초기화된 기기 / 계정이 없는 기기 전용
 
@@ -100,12 +112,19 @@ KEEP_EMULATOR=1 tool/emulator_test.sh 35
 `google_apis` 이미지 에뮬레이터에서는 스크립트가 `adb root`를 실행합니다. 그러면 adbd가 `:5555`에서 인증 없이(`ro.adb.secure=0`) 대기하므로,
 앱의 ADB 경로가 페어링 없이 자동으로 연결되어 **실제 ADB 경로**로 검증합니다.
 Play Store 이미지나 실기기에서는 앱에서 직접 ADB를 연결한 뒤 Enter를 누르세요 (`SKIP_CONNECT=1`이면 이 단계를 건너뜁니다).
-무선 디버깅 **페어링** 과정 자체는 실기기에서 확인해야 합니다.
 API 30 에뮬레이터는 adbd가 TCP 포트를 열지 않아 자동 연결이 되지 않습니다. 그래서 기본 대상에서 뺐습니다 (Android 11은 실기기에서 확인하세요).
 
+스크립트는 시간대 변경 시나리오만 검증합니다. 알림 페어링과 자동 복구는 아래 debug 명령으로 수동 확인합니다
+(API 35 에뮬레이터에서 확인 완료. 실제 재부팅·제조사별 알림 UI는 실기기에서 확인 필요).
+
 ```bash
-# debug 훅으로 컨트롤러 경로 실행
-adb shell am broadcast -f 268435488 -n com.edencrew.shiptime/.DebugCommandReceiver \
-  -a com.edencrew.shiptime.debug.CMD --es cmd plus --es id 1
+# debug 훅: 위젯 버튼과 같은 경로로 실행하고 결과를 logcat 한 줄(RESULT ...)로 남김
+CMD() { adb shell am broadcast -f 268435488 -n com.edencrew.shiptime/.DebugCommandReceiver \
+          -a com.edencrew.shiptime.debug.CMD --es id 1 "$@"; }
+CMD --es cmd plus                         # +1h  (minus, reapply, state, sync_on, sync_off)
+CMD --es cmd set --ei offset 9            # UTC+9 지정
+CMD --es cmd pair_start                   # 알림 페어링 시작 (앱이 화면에 떠 있을 때)
+CMD --es cmd pair_code --es code 123456   # 알림 입력칸과 같은 경로로 코드 제출
+CMD --es cmd boot                         # 부팅 후 재연결 작업 예약 (Wi-Fi 연결 시 바로 실행)
 adb logcat -s ShipTime
 ```

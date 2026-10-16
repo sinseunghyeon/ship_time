@@ -1,8 +1,10 @@
 package com.edencrew.shiptime
 
+import android.Manifest
 import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -16,6 +18,7 @@ import java.util.concurrent.Executors
 class MainActivity : FlutterActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
+    private var pendingPairResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,6 +94,15 @@ class MainActivity : FlutterActivity() {
                         result.success(false)
                     }
                 }
+                "startNotificationPairing" -> startNotificationPairing(result)
+                "openWirelessDebugging" -> {
+                    WirelessAdb.openSettings(this)
+                    result.success(true)
+                }
+                "setAutoAdb" -> background(result) {
+                    p.autoAdb = call.argument<Boolean>("value") ?: true
+                    state(ctx)
+                }
                 "getLog" -> result.success(p.log)
                 "clearLog" -> {
                     p.clearLog()
@@ -98,6 +110,44 @@ class MainActivity : FlutterActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    /**
+     * 알림 페어링 시작: (Android 13+) 알림 권한 확보 → 서비스 시작 → 무선 디버깅 설정 열기.
+     * 결과: {started: bool, reason?: "notification_denied"}
+     */
+    private fun startNotificationPairing(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingPairResult?.success(mapOf("started" to false, "reason" to "superseded"))
+            pendingPairResult = result
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIF)
+            return
+        }
+        launchPairing(result)
+    }
+
+    private fun launchPairing(result: MethodChannel.Result) {
+        try {
+            PairingService.start(this)
+            WirelessAdb.openSettings(this)
+            result.success(mapOf("started" to true))
+        } catch (t: Throwable) {
+            result.success(mapOf("started" to false, "reason" to (t.message ?: t.javaClass.simpleName)))
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQ_NOTIF) return
+        val r = pendingPairResult ?: return
+        pendingPairResult = null
+        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            launchPairing(r)
+        } else {
+            r.success(mapOf("started" to false, "reason" to "notification_denied"))
         }
     }
 
@@ -139,6 +189,10 @@ class MainActivity : FlutterActivity() {
             "adbNeedsPairing" to AdbPriv.needsPairing,
             "adbError" to AdbPriv.lastError,
             "deviceOwner" to dpm.isDeviceOwnerApp(ctx.packageName),
+            "autoAdb" to p.autoAdb,
+            "secureSettings" to WirelessAdb.hasSecureSettings(ctx),
+            "adbEverConnected" to p.adbEverConnected,
+            "adbWifiEnabled" to WirelessAdb.isEnabled(ctx),
             "sdk" to Build.VERSION.SDK_INT,
             "release" to Build.VERSION.RELEASE,
             "device" to "${Build.MANUFACTURER} ${Build.MODEL}",
@@ -147,5 +201,6 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val CHANNEL = "shiptime/native"
+        private const val REQ_NOTIF = 4213
     }
 }
