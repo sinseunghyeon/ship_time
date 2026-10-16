@@ -34,10 +34,6 @@ class Native {
   static Future<ShipState> adbPair({required int port, required String code}) async =>
       ShipState(await _map('adbPair', {'port': port, 'code': code}));
 
-  /// {granted: bool, reason?: not_running | too_old | denied_permanently | ...}
-  static Future<Map<String, dynamic>> requestShizukuPermission() => _map('requestShizukuPermission');
-
-  static Future<void> openShizuku() => _ch.invokeMethod('openShizuku');
   static Future<void> openDateSettings() => _ch.invokeMethod('openDateSettings');
   static Future<void> openDeveloperSettings() => _ch.invokeMethod('openDeveloperSettings');
 
@@ -75,11 +71,6 @@ class ShipState {
   bool get adbNeedsPairing => raw['adbNeedsPairing'] as bool? ?? false;
   String? get adbError => raw['adbError'] as String?;
 
-  bool get shizukuInstalled => raw['shizukuInstalled'] as bool? ?? false;
-  bool get shizukuRunning => raw['shizukuRunning'] as bool? ?? false;
-  bool get shizukuPermission => raw['shizukuPermission'] as bool? ?? false;
-  int? get shizukuVersion => raw['shizukuVersion'] as int?;
-  int? get shizukuUid => raw['shizukuUid'] as int?;
   bool get deviceOwner => raw['deviceOwner'] as bool? ?? false;
   int get sdk => raw['sdk'] as int? ?? 0;
   String get release => raw['release'] as String? ?? '';

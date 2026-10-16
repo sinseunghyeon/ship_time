@@ -162,7 +162,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ]),
           const ExpansionTile(
             tilePadding: EdgeInsets.zero,
-            title: Text('설정 방법 (Shizuku/루트 불필요)'),
+            title: Text('설정 방법 (루트 불필요)'),
             childrenPadding: EdgeInsets.only(bottom: 8),
             children: [
               Text(
@@ -171,7 +171,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 '3. 이 앱에서 "ADB 연결" — 처음이면 "페어링"으로 6자리 코드 입력\n'
                 '4. 연결되면 ±1h / 위젯으로 시스템 시간대가 바뀝니다\n\n'
                 '※ 재부팅 후에는 무선 디버깅을 다시 켜고 "ADB 연결"을 한 번 더 하세요.\n'
-                '※ 구글 계정이 있어도 동작합니다 (Device Owner/루트/Shizuku 불필요).\n'
+                '※ 구글 계정이 있어도 동작합니다 (Device Owner/루트 불필요).\n'
                 '※ 무선 디버깅이 꺼져 있어도 위젯은 "표시 전용"으로 동작합니다.',
                 style: TextStyle(height: 1.5),
               ),

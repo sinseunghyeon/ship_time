@@ -11,11 +11,10 @@ import android.provider.Settings
  *
  * 시스템 시간대 변경 전략 (위에서부터 시도, 각 단계 후 persist.sys.timezone 으로 검증):
  *  0. Device Owner 로 등록돼 있으면 DevicePolicyManager.setTimeZone (공식 API)
- *  1. ADB(무선 디버깅) / Shizuku / Root 로 셸·바인더 권한
+ *  1. ADB(무선 디버깅) / Root 로 셸 권한
  *  2. `cmd time_zone_detector suggest_manual_time_zone` (Android 12+)
  *  3. `service call alarm <code> s16 <zone>`
  *  4. Root 전용: setprop + TIMEZONE_CHANGED 브로드캐스트 (최후 수단)
- *  5. Shizuku 만: IAlarmManager.setTimeZone 바인더 트랜잭션
  */
 object ShipTimeController {
     private val lock = Any()
@@ -87,7 +86,7 @@ object ShipTimeController {
             }
         }
 
-        // 권한 주체 선택 (ADB 무선 디버깅 우선 — Shizuku/루트 불필요)
+        // 권한 주체 선택 (ADB 무선 디버깅 우선 — 루트 불필요)
         AdbPriv.init(ctx)
         val priv: Priv? = pickPriv(p, dl, log)
         if (priv == null) {
@@ -101,16 +100,12 @@ object ShipTimeController {
         log += "IAlarmManager.setTimeZone 트랜잭션 코드: ${code ?: "조회 실패"}"
 
         val strategies = buildList<Strategy> {
-            if (priv === ShizukuPriv) {
-                add(Strategy("binder IAlarmManager.setTimeZone") { ShizukuPriv.alarmSetTimeZone(target) })
-            }
-            val canExec = priv === AdbPriv || priv === RootPriv || (priv === ShizukuPriv && ShizukuPriv.canExec)
-            if (canExec && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 add(Strategy("cmd time_zone_detector suggest_manual_time_zone") {
                     priv.exec("cmd time_zone_detector suggest_manual_time_zone --zone_id $target", dl.cap(3000)).summary()
                 })
             }
-            if (canExec && code != null) {
+            if (code != null) {
                 add(Strategy("service call alarm $code") {
                     priv.exec("service call alarm $code s16 $target", dl.cap(3000)).summary()
                 })
@@ -157,16 +152,6 @@ object ShipTimeController {
         } else {
             log += "ADB 무선 디버깅: Android 11 미만에서는 미지원"
         }
-        if (ShizukuPriv.waitBinder(dl.cap(2000))) {
-            when {
-                ShizukuPriv.isPreV11() -> log += "Shizuku 버전이 너무 오래됨 (v11 이상 필요)"
-                !ShizukuPriv.hasPermission() -> log += "Shizuku 실행 중이나 이 앱 권한 미허용"
-                else -> {
-                    log += "Shizuku v${ShizukuPriv.version()} uid=${ShizukuPriv.uid()} (0=root, 2000=adb)"
-                    return ShizukuPriv
-                }
-            }
-        }
         if (p.useRoot) {
             if (RootPriv.check(dl.cap(4000))) return RootPriv
             log += "루트(su) 사용 불가"
@@ -190,11 +175,6 @@ object ShipTimeController {
             Settings.Global.putInt(cr, Settings.Global.AUTO_TIME_ZONE, 0)
             log += "자동 시간대 끔 (앱 권한)"
         } catch (_: Throwable) {
-        }
-        val canExec = priv === AdbPriv || priv === RootPriv || (priv === ShizukuPriv && ShizukuPriv.canExec)
-        if (!canExec) {
-            log += "자동 시간대 끄기: 명령 실행 불가 (수동으로 꺼야 할 수 있음)"
-            return
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val r = priv.exec("cmd time_zone_detector set_auto_detection_enabled false", dl.cap(3000))

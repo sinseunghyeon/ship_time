@@ -10,21 +10,10 @@
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="33" />
 
-    <!-- Shizuku v10 이하 호환용 (v11+ 는 런타임 요청만 사용) — 선택 폴백 -->
-    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
     <!-- 선택: adb 로 한 번 grant 해두면 자동 시간대 끄기를 앱이 직접 할 수 있음 -->
     <uses-permission
         android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
-
-    <!-- Android 11+ 패키지 가시성: Shizuku 설치 여부 확인 -->
-    <queries>
-        <package android:name="moe.shizuku.privileged.api" />
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="https" />
-        </intent>
-    </queries>
 
     <application
         android:label="Helm"
@@ -90,15 +79,6 @@
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
             </intent-filter>
         </receiver>
-
-        <!-- Shizuku 바인더 수신 -->
-        <provider
-            android:name="rikka.shizuku.ShizukuProvider"
-            android:authorities="${applicationId}.shizuku"
-            android:enabled="true"
-            android:exported="true"
-            android:multiprocess="false"
-            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
         <meta-data
             android:name="flutterEmbedding"

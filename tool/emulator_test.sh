@@ -262,7 +262,9 @@ for API in "${APIS[@]}"; do
   fi
 
   # 실제로 시스템 시간대를 바꿀 수 있는지 1회 탐지 (판정이 아니라 안내용)
+  # 이전 실행이 중간에 끊겨 표시 전용(sync off)이 남아 있을 수 있으므로 먼저 켠다.
   # 이미 UTC+9 이면 변경이 생략되므로 다른 값을 거쳐서 확인한다
+  run_cmd sync_on
   run_cmd set 8
   run_cmd set 9
   if [ "$(S getprop persist.sys.timezone)" = "Etc/GMT-9" ]; then

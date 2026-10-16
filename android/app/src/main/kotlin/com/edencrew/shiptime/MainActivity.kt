@@ -3,8 +3,6 @@ package com.edencrew.shiptime
 import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -13,35 +11,15 @@ import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import rikka.shizuku.Shizuku
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
-    private var pendingPermResult: MethodChannel.Result? = null
-
-    private val permListener = Shizuku.OnRequestPermissionResultListener { _, grant ->
-        val r = pendingPermResult
-        pendingPermResult = null
-        main.post { r?.success(mapOf("granted" to (grant == PackageManager.PERMISSION_GRANTED))) }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AdbPriv.init(applicationContext)
-        try {
-            Shizuku.addRequestPermissionResultListener(permListener)
-        } catch (_: Throwable) {
-        }
-    }
-
-    override fun onDestroy() {
-        try {
-            Shizuku.removeRequestPermissionResultListener(permListener)
-        } catch (_: Throwable) {
-        }
-        super.onDestroy()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -101,13 +79,6 @@ class MainActivity : FlutterActivity() {
                     val ok = AdbPriv.pair(port, code)
                     state(ctx) + mapOf("adbPairOk" to ok, "adbError" to AdbPriv.lastError)
                 }
-                "requestShizukuPermission" -> requestShizukuPermission(result)
-                "openShizuku" -> {
-                    val launch = packageManager.getLaunchIntentForPackage(ShizukuPriv.PKG)
-                    val i = launch ?: Intent(Intent.ACTION_VIEW, Uri.parse(SHIZUKU_URL))
-                    startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                    result.success(launch != null)
-                }
                 "openDateSettings" -> {
                     startActivity(Intent(Settings.ACTION_DATE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                     result.success(true)
@@ -130,25 +101,6 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun requestShizukuPermission(result: MethodChannel.Result) {
-        try {
-            when {
-                !ShizukuPriv.isRunning() -> result.success(mapOf("granted" to false, "reason" to "not_running"))
-                ShizukuPriv.isPreV11() -> result.success(mapOf("granted" to false, "reason" to "too_old"))
-                ShizukuPriv.hasPermission() -> result.success(mapOf("granted" to true))
-                Shizuku.shouldShowRequestPermissionRationale() ->
-                    result.success(mapOf("granted" to false, "reason" to "denied_permanently"))
-                else -> {
-                    pendingPermResult?.success(mapOf("granted" to false, "reason" to "superseded"))
-                    pendingPermResult = result
-                    Shizuku.requestPermission(REQ_SHIZUKU)
-                }
-            }
-        } catch (t: Throwable) {
-            result.success(mapOf("granted" to false, "reason" to (t.message ?: t.javaClass.simpleName)))
-        }
-    }
-
     private fun background(result: MethodChannel.Result, block: () -> Any?) {
         io.execute {
             try {
@@ -164,12 +116,6 @@ class MainActivity : FlutterActivity() {
         AdbPriv.init(ctx)
         val p = Prefs(ctx)
         val sysZone = SysTz.current()
-        val installed = try {
-            ctx.packageManager.getPackageInfo(ShizukuPriv.PKG, 0)
-            true
-        } catch (_: Throwable) {
-            false
-        }
         val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         val autoTz = try {
             Settings.Global.getInt(ctx.contentResolver, Settings.Global.AUTO_TIME_ZONE, -1)
@@ -192,11 +138,6 @@ class MainActivity : FlutterActivity() {
             "adbConnected" to AdbPriv.connected,
             "adbNeedsPairing" to AdbPriv.needsPairing,
             "adbError" to AdbPriv.lastError,
-            "shizukuInstalled" to installed,
-            "shizukuRunning" to ShizukuPriv.isRunning(),
-            "shizukuPermission" to ShizukuPriv.hasPermission(),
-            "shizukuVersion" to ShizukuPriv.version(),
-            "shizukuUid" to ShizukuPriv.uid(),
             "deviceOwner" to dpm.isDeviceOwnerApp(ctx.packageName),
             "sdk" to Build.VERSION.SDK_INT,
             "release" to Build.VERSION.RELEASE,
@@ -206,7 +147,5 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val CHANNEL = "shiptime/native"
-        private const val REQ_SHIZUKU = 4210
-        private const val SHIZUKU_URL = "https://play.google.com/store/apps/details?id=moe.shizuku.privileged.api"
     }
 }

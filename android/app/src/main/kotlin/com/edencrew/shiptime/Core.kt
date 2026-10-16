@@ -104,7 +104,7 @@ class Prefs(ctx: Context) {
             sp.edit().putBoolean(K_SYNC, v).commit()
         }
 
-    /** Shizuku 가 없을 때 su 로 시도할지 */
+    /** ADB 가 안 될 때 su 로 시도할지 */
     var useRoot: Boolean
         get() = sp.getBoolean(K_ROOT, false)
         set(v) {

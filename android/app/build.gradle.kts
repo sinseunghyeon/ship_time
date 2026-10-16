@@ -41,13 +41,10 @@ kotlin {
 }
 
 dependencies {
-    // 앱 내 무선 디버깅(ADB) — Shizuku 없이 셸 권한으로 시간대 변경
+    // 앱 내 무선 디버깅(ADB) — 셸 권한으로 시간대 변경
     implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
     implementation("com.github.MuntashirAkon:sun-security-android:1.1")
     implementation("org.conscrypt:conscrypt-android:2.5.3")
-    // Shizuku: 선택적 폴백
-    implementation("dev.rikka.shizuku:api:13.1.5")
-    implementation("dev.rikka.shizuku:provider:13.1.5")
     // 숨김 API(IAlarmManager 트랜잭션 코드, SystemProperties) 리플렉션 허용
     implementation("org.lsposed.hiddenapibypass:hiddenapibypass:4.3")
 }

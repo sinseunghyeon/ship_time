@@ -11,7 +11,7 @@ import kotlin.concurrent.thread
  * 결과를 logcat 한 줄로 남긴다. tool/emulator_test.sh 가 이 줄을 파싱한다.
  *
  * cmd: plus | minus | set(--ei offset N) | reapply | sync_on | sync_off | state
- * 출력: RESULT id=.. cmd=.. ok=.. offset=.. target=.. sys=.. shizuku=running/permission uid=.. msg=..
+ * 출력: RESULT id=.. cmd=.. ok=.. offset=.. target=.. sys=.. adb=connected sdk=.. msg=..
  */
 class DebugCommandReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
@@ -34,8 +34,8 @@ class DebugCommandReceiver : BroadcastReceiver() {
                 Log.i(
                     TAG,
                     "RESULT id=$id cmd=$cmd ok=${out?.ok} offset=${p.offset} target=${Zones.zoneId(p.offset)} " +
-                        "sys=${SysTz.current()} shizuku=${ShizukuPriv.isRunning()}/${ShizukuPriv.hasPermission()} " +
-                        "uid=${ShizukuPriv.uid()} sdk=${android.os.Build.VERSION.SDK_INT} msg=${out?.message}",
+                        "sys=${SysTz.current()} adb=${AdbPriv.connected} " +
+                        "sdk=${android.os.Build.VERSION.SDK_INT} msg=${out?.message}",
                 )
             } catch (t: Throwable) {
                 Log.e(TAG, "RESULT id=$id cmd=$cmd ok=false error=$t")

@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 
 /**
- * 무선 디버깅(ADB)으로 셸 명령을 실행한다. Shizuku/루트/Device Owner 없이
+ * 무선 디버깅(ADB)으로 셸 명령을 실행한다. 루트/Device Owner 없이
  * 구글 계정이 있는 기기에서도 시스템 시간대를 바꿀 수 있는 권한 경로.
  *
  * 전제: 개발자 옵션 > 무선 디버깅 ON (Android 11+). 재부팅 후 무선 디버깅을 다시 켜야 한다.
