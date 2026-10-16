@@ -24,8 +24,10 @@ object ShipTimeController {
 
     private class Strategy(val name: String, val run: () -> String)
 
-    fun adjust(ctx: Context, delta: Int, budgetMs: Long = 8000): Outcome =
+    // 현재 오프셋 읽기까지 잠금 안에서 해야 위젯 연타 시 두 스레드가 같은 값을 읽지 않는다
+    fun adjust(ctx: Context, delta: Int, budgetMs: Long = 8000): Outcome = synchronized(lock) {
         setOffset(ctx, Prefs(ctx).offset + delta, budgetMs)
+    }
 
     fun setOffset(ctx: Context, newOffset: Int, budgetMs: Long = 8000): Outcome = synchronized(lock) {
         val app = ctx.applicationContext

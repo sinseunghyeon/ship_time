@@ -158,13 +158,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       }),
                 child: const Text('연결 해제'),
               ),
-            TextButton(onPressed: Native.openDeveloperSettings, child: const Text('개발자 옵션')),
+            const TextButton(onPressed: Native.openDeveloperSettings, child: Text('개발자 옵션')),
           ]),
-          ExpansionTile(
+          const ExpansionTile(
             tilePadding: EdgeInsets.zero,
-            title: const Text('설정 방법 (Shizuku/루트 불필요)'),
-            childrenPadding: const EdgeInsets.only(bottom: 8),
-            children: const [
+            title: Text('설정 방법 (Shizuku/루트 불필요)'),
+            childrenPadding: EdgeInsets.only(bottom: 8),
+            children: [
               Text(
                 '1. 설정 > 휴대전화 정보 > 소프트웨어 정보 > 빌드번호 7번 탭 → 개발자 옵션\n'
                 '2. Wi-Fi 연결 상태에서 개발자 옵션 > 무선 디버깅 켜기\n'
@@ -187,10 +187,10 @@ class _SettingsPageState extends State<SettingsPage> {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Column(children: [
-          ListTile(
-            title: const Text('날짜/시간 설정 열기'),
-            subtitle: const Text('시간대를 직접 바꾸거나 자동 시간대를 끌 때'),
-            trailing: const Icon(Icons.open_in_new, size: 18),
+          const ListTile(
+            title: Text('날짜/시간 설정 열기'),
+            subtitle: Text('시간대를 직접 바꾸거나 자동 시간대를 끌 때'),
+            trailing: Icon(Icons.open_in_new, size: 18),
             onTap: Native.openDateSettings,
           ),
           SwitchListTile(

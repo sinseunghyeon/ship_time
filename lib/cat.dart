@@ -91,7 +91,7 @@ class _CatPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     final furDark = Color.lerp(fur, Colors.black, 0.12)!;
-    final pink = const Color(0xFFFF9F8F);
+    const pink = Color(0xFFFF9F8F);
 
     // ears
     fill.color = fur;

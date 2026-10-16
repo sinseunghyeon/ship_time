@@ -1,4 +1,4 @@
-/// 공통 포맷 유틸. (색상은 app_colors.dart 의 AppColors 에서 관리)
+// 공통 포맷 유틸. (색상은 app_colors.dart 의 AppColors 에서 관리)
 
 String fmtTime(DateTime t, {bool sec = true}) {
   String two(int n) => n.toString().padLeft(2, '0');

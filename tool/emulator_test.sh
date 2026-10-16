@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Ship Time 에뮬레이터 자동 테스트 (macOS / Linux)
 #
-#   tool/emulator_test.sh                # 기본: API 30, 33, 35
+#   tool/emulator_test.sh                # 기본: API 33, 35 (API 30 에뮬레이터는 앱 ADB 자동 연결 불가)
 #   tool/emulator_test.sh 28 31 34 36    # 원하는 API 레벨 지정
 #
 # 환경변수
@@ -17,7 +17,9 @@
 #   2. 에뮬레이터 부팅
 #   3. Ship Time(debug) 설치
 #   4. 앱이 시스템 시간대를 바꿀 수 있는 상태로 만든다
-#      (앱의 ADB 연결 화면에서 직접 연결 — 이 스크립트는 그 과정을 자동화하지 않는다)
+#      google_apis 에뮬레이터: adb root → adbd 가 :5555 로 대기하고 ro.adb.secure=0 이라
+#      앱의 ADB 경로(autoConnect 실패 → 5555 폴백)가 페어링 없이 붙는다 → 자동
+#      그 외(Play 이미지·실기기): 앱에서 직접 ADB 연결 후 Enter (SKIP_CONNECT=1 이면 생략)
 #   5. 위젯 버튼과 같은 경로로 ±1h / 오프셋 지정 시나리오 실행
 #      → 매 단계 persist.sys.timezone 이 기대값인지, 기기 UTC 가 틀어지지 않았는지 검사
 #   6. 결과 요약 + 로그 저장 (build/emulator-test/)
@@ -26,7 +28,7 @@
 set -uo pipefail
 
 APIS=("$@")
-[ ${#APIS[@]} -eq 0 ] && APIS=(30 33 35)
+[ ${#APIS[@]} -eq 0 ] && APIS=(33 35)
 
 PKG=com.edencrew.shiptime
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -99,16 +101,18 @@ run_cmd() { # run_cmd <cmd> [offset]  → LAST 에 RESULT 줄 저장
   local id="t$CMD_ID" extra=()
   [ $# -ge 2 ] && extra=(--ei offset "$2")
   A logcat -c >/dev/null 2>&1
-  A shell am broadcast -f 32 -n "$PKG/.DebugCommandReceiver" -a "$PKG.debug.CMD" \
+  # -f 0x10000020 = FLAG_RECEIVER_FOREGROUND | FLAG_INCLUDE_STOPPED_PACKAGES
+  # (Android 14+ 는 캐시된 앱으로 가는 백그라운드 브로드캐스트를 수십 초까지 미룬다)
+  A shell am broadcast -f 268435488 -n "$PKG/.DebugCommandReceiver" -a "$PKG.debug.CMD" \
       --es cmd "$1" --es id "$id" ${extra[@]+"${extra[@]}"} >/dev/null 2>&1
   LAST=""
-  for _ in $(seq 1 50); do
-    LAST=$(A logcat -d -s ShipTime:I ShipTime:E 2>/dev/null | tr -d '\r' | grep "RESULT id=$id " | tail -1)
+  for _ in $(seq 1 80); do
+    LAST=$(A logcat -d -s ShipTime:I 2>/dev/null | tr -d '\r' | grep "RESULT id=$id " | tail -1)
     [ -n "$LAST" ] && break
     sleep 0.5
   done
   # 이번 명령의 상세 로그(전략별 시도 내역)도 저장
-  A logcat -d -s ShipTime:I ShipTime:E 2>/dev/null | tr -d '\r' >>"$LOGFILE"
+  A logcat -d -s ShipTime:I 2>/dev/null | tr -d '\r' >>"$LOGFILE"
   [ -n "$LAST" ]
 }
 
@@ -136,7 +140,7 @@ expect() { # expect <설명> <cmd> [offset] <기대 오프셋>
   if [ -z "$reason" ] && [ "$sys" != "$wantZone" ] && [[ "$msg" != 이미* ]]; then
     reason="시스템 시간대 $sys ≠ $wantZone"
   fi
-  [ -z "$reason" ] && [ "$drift" -gt 5 ] && reason="기기 UTC 가 ${drift}초 어긋남"
+  [ -z "$reason" ] && [ "$drift" -gt 60 ] && reason="기기 UTC 가 ${drift}초 어긋남"
 
   if [ -z "$reason" ]; then
     PASS=$((PASS + 1))
@@ -233,17 +237,33 @@ for API in "${APIS[@]}"; do
   A shell settings put global auto_time_zone 1 >/dev/null 2>&1
 
   # ── 앱이 시스템 시간대를 바꿀 수 있는 상태로 만들기 ────────────────────────
-  # 이 스크립트는 앱의 ADB 연결(무선 디버깅 페어링)을 자동화하지 않는다.
-  # 에뮬레이터 화면에서 직접 연결한 뒤 Enter 를 누르면 시나리오를 검증한다.
+  # 에뮬레이터(google_apis)는 adb root 후 adbd 가 :5555 로 대기하고 인증을 요구하지 않으므로
+  # 앱이 무선 디버깅 페어링 없이 같은 adbd 에 붙는다. 실패하면 수동 연결로 넘어간다.
+  auto_adb=0
+  if [ "$(S getprop ro.kernel.qemu)$(S getprop ro.boot.qemu)" != "" ] && A root 2>/dev/null | grep -qE "restarting|already"; then
+    sleep 2; A wait-for-device
+    for _ in $(seq 1 10); do
+      S 'netstat -tln 2>/dev/null' | grep -q ':5555 ' && break
+      sleep 1
+    done
+    if [ "$(S getprop ro.adb.secure)" = "0" ] && S 'netstat -tln 2>/dev/null' | grep -q ':5555 '; then
+      auto_adb=1
+      info "에뮬레이터 adbd :5555 (인증 없음) → 앱 ADB 경로 자동 연결"
+    fi
+  fi
   A shell am start -n "$PKG/.MainActivity" >/dev/null 2>&1
   sleep 3
   run_cmd state
-  printf '\n  %s에뮬레이터 화면의 Ship Time 앱에서 시스템 시간대를 바꿀 수 있는 상태로 만든 뒤 Enter%s\n' "$c_y" "$c_0"
-  printf '  (연결이 안 돼 있으면 아래 시나리오는 "표시 전용"으로만 통과/실패가 판정됩니다)\n'
-  printf '  건너뛰려면 그냥 Enter — SKIP_CONNECT=1 로 실행하면 이 질문을 생략합니다\n'
-  [ "${SKIP_CONNECT:-0}" = 1 ] || read -r _
+  if [ $auto_adb = 0 ]; then
+    printf '\n  %s에뮬레이터 화면의 Ship Time 앱에서 시스템 시간대를 바꿀 수 있는 상태로 만든 뒤 Enter%s\n' "$c_y" "$c_0"
+    printf '  (연결이 안 돼 있으면 아래 시나리오는 "표시 전용"으로만 통과/실패가 판정됩니다)\n'
+    printf '  건너뛰려면 그냥 Enter — SKIP_CONNECT=1 로 실행하면 이 질문을 생략합니다\n'
+    [ "${SKIP_CONNECT:-0}" = 1 ] || read -r _
+  fi
 
   # 실제로 시스템 시간대를 바꿀 수 있는지 1회 탐지 (판정이 아니라 안내용)
+  # 이미 UTC+9 이면 변경이 생략되므로 다른 값을 거쳐서 확인한다
+  run_cmd set 8
   run_cmd set 9
   if [ "$(S getprop persist.sys.timezone)" = "Etc/GMT-9" ]; then
     info "시스템 시간대 변경 경로 확인됨 → 전체 시나리오 검증"

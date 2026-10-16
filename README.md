@@ -11,8 +11,13 @@ Shizuku·루트·Device Owner 없이, 구글 계정이 있는 기기에서도 �
 
 ```
 lib/
-  main.dart     Flutter UI (시계, ±1h, 모드 스위치, ADB 페어링, 진단 로그)
-  native.dart   MethodChannel 래퍼 (shiptime/native)
+  main.dart             진입점 + 크래시 로깅
+  app.dart              MaterialApp / 테마
+  root_shell.dart       하단 탭 셸 (시간 · 설정 · 기록)
+  ship_controller.dart  앱 전역 상태 (폴링, busy, 토스트)
+  native.dart           MethodChannel 래퍼 (shiptime/native) + ShipState
+  pages/                home_page(시계·±1h) / settings_page(ADB 연결·페어링) / log_page(진단 로그)
+  cat.dart, ui.dart, app_colors.dart   마스코트·포맷 유틸·색상
 android/app/src/main/kotlin/com/edencrew/shiptime/
   Core.kt                Zones(오프셋↔zoneId), Prefs, Hidden(숨김 API), SysTz
   Priv.kt                ShizukuPriv / RootPriv (선택 폴백)
@@ -21,7 +26,7 @@ android/app/src/main/kotlin/com/edencrew/shiptime/
   ShipTimeController.kt  ★ 시간대 변경 로직 (전략 순차 시도 + 검증 + 로그)
   ShipTimeWidget.kt      AppWidgetProvider + RemoteViews 갱신 + DeviceAdminReceiver
   MainActivity.kt        MethodChannel 핸들러
-android/app/src/main/res/layout/widget_ship_time.xml   위젯 레이아웃
+android/app/src/main/res/layout/widget_ship_time(_large).xml   위젯 레이아웃 (기본 / 큰 고양이)
 ```
 
 위젯 버튼은 앱이 꺼져 있어도 동작해야 하므로 실제 로직은 Kotlin(`ShipTimeController`)에 있습니다.
@@ -89,15 +94,19 @@ flutter build apk --release
 ## 에뮬레이터 테스트
 
 ```bash
-tool/emulator_test.sh              # 기본: API 30, 33, 35
+tool/emulator_test.sh              # 기본: API 33, 35
 KEEP_EMULATOR=1 tool/emulator_test.sh 35
 ```
 
-에뮬레이터 스크립트는 아직 Shizuku 경로를 기준으로 합니다. ADB 무선 디버깅 경로를 실기기에서 확인하는 것을 권장합니다.
+`google_apis` 이미지 에뮬레이터에서는 스크립트가 `adb root`를 실행합니다. 그러면 adbd가 `:5555`에서 인증 없이(`ro.adb.secure=0`) 대기하므로,
+앱의 ADB 경로가 페어링 없이 자동으로 연결되어 **실제 ADB 경로**로 검증합니다.
+Play Store 이미지나 실기기에서는 앱에서 직접 ADB를 연결한 뒤 Enter를 누르세요 (`SKIP_CONNECT=1`이면 이 단계를 건너뜁니다).
+무선 디버깅 **페어링** 과정 자체는 실기기에서 확인해야 합니다.
+API 30 에뮬레이터는 adbd가 TCP 포트를 열지 않아 자동 연결이 되지 않습니다. 그래서 기본 대상에서 뺐습니다 (Android 11은 실기기에서 확인하세요).
 
 ```bash
 # debug 훅으로 컨트롤러 경로 실행
-adb shell am broadcast -f 32 -n com.edencrew.shiptime/.DebugCommandReceiver \
+adb shell am broadcast -f 268435488 -n com.edencrew.shiptime/.DebugCommandReceiver \
   -a com.edencrew.shiptime.debug.CMD --es cmd plus --es id 1
 adb logcat -s ShipTime
 ```
