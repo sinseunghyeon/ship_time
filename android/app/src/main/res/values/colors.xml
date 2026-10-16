@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="navy">#0B1E33</color>
+    <color name="widget_bg">#E60B1E33</color>
+    <color name="widget_btn">#1F3A5A</color>
+    <color name="widget_text">#FFFFFF</color>
+    <color name="widget_sub">#9FB3C8</color>
+    <color name="status_ok">#5FD38D</color>
+    <color name="status_warn">#FFC24B</color>
+    <color name="status_fail">#FF7A6B</color>
+    <color name="ic_launcher_background">#0B1E33</color>
+</resources>

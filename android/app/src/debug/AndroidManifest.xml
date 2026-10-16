@@ -1,0 +1,15 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Flutter 디버그(hot reload)용 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application>
+        <!-- debug 빌드에만 포함되는 테스트 훅 (사용법: README "에뮬레이터 테스트") -->
+        <receiver
+            android:name=".DebugCommandReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.edencrew.shiptime.debug.CMD" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>
